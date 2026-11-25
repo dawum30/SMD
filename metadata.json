@@ -1,0 +1,6 @@
+{
+  "name": "Akwaaba SchoolSuite",
+  "description": "Complete multi-school Ghanaian Basic School Management System (Basic 1–9) powered by Supabase PostgreSQL, Auth, Storage, and Vercel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
