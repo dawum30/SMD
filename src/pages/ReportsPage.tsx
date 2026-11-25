@@ -618,12 +618,11 @@ export function ReportsPage() {
                   } else if (generalType === 'teachers') {
                     downloadCSV(
                       'teacher-report.csv',
-                      ['Code', 'Name', 'Gender', 'GHA Number', 'Rank', 'Status'],
+                      ['Code', 'Name', 'Gender', 'Rank', 'Status'],
                       teachersList.map((t) => [
                         t.teacher_code,
                         formatFullName(t.first_name, t.middle_name, t.surname),
                         t.gender,
-                        t.gha_number,
                         t.current_rank,
                         t.employment_status,
                       ])
@@ -675,12 +674,11 @@ export function ReportsPage() {
                     downloadTablePDF(
                       title,
                       'Staff directory and Ghana Education Service ranks',
-                      ['ID', 'Name', 'Gender', 'GHA Number', 'Rank', 'Status'],
+                      ['ID', 'Name', 'Gender', 'Rank', 'Status'],
                       teachersList.map((t) => [
                         t.teacher_code,
                         formatFullName(t.first_name, t.middle_name, t.surname),
                         t.gender,
-                        t.gha_number || '-',
                         t.current_rank,
                         t.employment_status,
                       ]),
@@ -790,7 +788,6 @@ export function ReportsPage() {
                   <tr>
                     <th className="py-3 px-4">Teacher ID</th>
                     <th className="py-3 px-4">Name</th>
-                    <th className="py-3 px-4">GHA Number</th>
                     <th className="py-3 px-4">Current Rank</th>
                     <th className="py-3 px-4">Status</th>
                   </tr>
@@ -802,7 +799,6 @@ export function ReportsPage() {
                       <td className="py-3 px-4 font-medium text-slate-900">
                         {formatFullName(t.first_name, t.middle_name, t.surname)}
                       </td>
-                      <td className="py-3 px-4 font-mono text-xs">{t.gha_number || '—'}</td>
                       <td className="py-3 px-4 text-slate-700">{t.current_rank}</td>
                       <td className="py-3 px-4 text-xs text-slate-600">{t.employment_status}</td>
                     </tr>

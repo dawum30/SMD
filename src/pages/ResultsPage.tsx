@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Lock, Save, Search, Trash2, Unlock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClipboardEdit, Lock, Save, Search, Trash2, Unlock } from 'lucide-react';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -7,6 +7,7 @@ import { api } from '../services/api';
 import {
   AcademicYear,
   AssessmentConfig,
+  ClassSubjectAssignment,
   GradingScaleItem,
   ResultRecord,
   SchoolClass,
@@ -28,6 +29,20 @@ interface SheetRow {
   existing_id?: string;
 }
 
+interface StudentFormRow {
+  subject_id: string;
+  subject_code: string;
+  subject_name: string;
+  is_class_subject: boolean;
+  class_exercise: string;
+  homework: string;
+  project: string;
+  exam: string;
+  is_locked: boolean;
+  dirty: boolean;
+  existing_id?: string;
+}
+
 export function ResultsPage() {
   const { isAdmin, activeSchool } = useAuth();
   const { notify } = useToast();
@@ -36,21 +51,24 @@ export function ResultsPage() {
   const [terms, setTerms] = useState<Term[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [classSubjects, setClassSubjects] = useState<ClassSubjectAssignment[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [assessment, setAssessment] = useState<Pick<AssessmentConfig, 'class_exercise_max' | 'homework_max' | 'project_max' | 'exam_max'>>(
-    DEFAULT_ASSESSMENT_CONFIG
-  );
+  const [assessment, setAssessment] = useState<
+    Pick<AssessmentConfig, 'class_exercise_max' | 'homework_max' | 'project_max' | 'exam_max'>
+  >(DEFAULT_ASSESSMENT_CONFIG);
   const [gradingScale, setGradingScale] = useState<GradingScaleItem[]>([]);
 
   const [yearId, setYearId] = useState('');
   const [termId, setTermId] = useState('');
   const [classId, setClassId] = useState('');
   const [subjectId, setSubjectId] = useState('');
-  const [tab, setTab] = useState<'entry' | 'register'>('entry');
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [tab, setTab] = useState<'student' | 'entry' | 'register'>('student');
   const [search, setSearch] = useState('');
 
   const [results, setResults] = useState<ResultRecord[]>([]);
   const [sheetRows, setSheetRows] = useState<SheetRow[]>([]);
+  const [studentFormRows, setStudentFormRows] = useState<StudentFormRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ResultRecord | null>(null);
@@ -60,10 +78,11 @@ export function ResultsPage() {
     async function init() {
       setLoading(true);
       try {
-        const [{ academicYears, terms: trms }, cls, subs, stus, settingsData] = await Promise.all([
+        const [{ academicYears, terms: trms }, cls, subs, clsSubs, stus, settingsData] = await Promise.all([
           api.getAcademicYearsAndTerms(),
           api.getClasses(),
           api.getSubjects(),
+          api.getClassSubjects(),
           api.getStudents(),
           api.getSettings(),
         ]);
@@ -72,6 +91,7 @@ export function ResultsPage() {
         setTerms(trms);
         setClasses(cls);
         setSubjects(subs);
+        setClassSubjects(clsSubs);
         setStudents(stus);
         if (settingsData.assessment) setAssessment(settingsData.assessment);
         setGradingScale(settingsData.gradingScale);
@@ -95,6 +115,21 @@ export function ResultsPage() {
     };
   }, [activeSchool]);
 
+  const classStudents = useMemo(
+    () => students.filter((s) => s.current_class_id === classId && s.status === 'Active'),
+    [students, classId]
+  );
+
+  useEffect(() => {
+    if (classStudents.length === 0) {
+      setSelectedStudentId('');
+      return;
+    }
+    if (!classStudents.some((s) => s.id === selectedStudentId)) {
+      setSelectedStudentId(classStudents[0].id);
+    }
+  }, [classStudents, selectedStudentId]);
+
   const loadResults = async () => {
     if (!yearId || !termId || !classId) return;
     try {
@@ -116,10 +151,19 @@ export function ResultsPage() {
     }
   }, [yearId, termId, classId, subjectId, tab]);
 
+  // Ensure a subject is always selected when entering marks on bulk sheet
+  useEffect(() => {
+    if (tab === 'entry' && !subjectId && subjects.length > 0) {
+      setSubjectId(subjects[0].id);
+    }
+  }, [tab, subjectId, subjects]);
+
   // Build editable bulk entry sheet whenever class/subject/results change
   useEffect(() => {
-    if (!classId || !subjectId) return;
-    const classStudents = students.filter((s) => s.current_class_id === classId && s.status === 'Active');
+    if (!classId || !subjectId) {
+      setSheetRows([]);
+      return;
+    }
     const rows: SheetRow[] = classStudents.map((st) => {
       const existing = results.find((r) => r.student_id === st.id && r.subject_id === subjectId);
       return {
@@ -135,9 +179,47 @@ export function ResultsPage() {
       };
     });
     setSheetRows(rows);
-  }, [classId, subjectId, students, results]);
+  }, [classId, subjectId, classStudents, results]);
+
+  // Build per-student form rows whenever student, subjects, or results change
+  useEffect(() => {
+    if (!classId || !selectedStudentId) {
+      setStudentFormRows([]);
+      return;
+    }
+    const assignedSubjectIds = new Set(
+      classSubjects.filter((cs) => cs.class_id === classId).map((cs) => cs.subject_id)
+    );
+    const activeSubjects = subjects.filter((s) => s.status === 'Active');
+    const orderedSubjects = [...activeSubjects].sort((a, b) => {
+      const aAssigned = assignedSubjectIds.has(a.id) ? 0 : 1;
+      const bAssigned = assignedSubjectIds.has(b.id) ? 0 : 1;
+      if (aAssigned !== bAssigned) return aAssigned - bAssigned;
+      return a.name.localeCompare(b.name);
+    });
+
+    const rows: StudentFormRow[] = orderedSubjects.map((sub) => {
+      const existing = results.find((r) => r.student_id === selectedStudentId && r.subject_id === sub.id);
+      return {
+        subject_id: sub.id,
+        subject_code: sub.subject_code,
+        subject_name: sub.name,
+        is_class_subject: assignedSubjectIds.has(sub.id),
+        class_exercise: existing ? String(existing.class_exercise) : '',
+        homework: existing ? String(existing.homework) : '',
+        project: existing ? String(existing.project) : '',
+        exam: existing ? String(existing.exam) : '',
+        is_locked: existing ? Boolean(existing.is_locked) : false,
+        dirty: Boolean(existing),
+        existing_id: existing?.id,
+      };
+    });
+    setStudentFormRows(rows);
+  }, [classId, selectedStudentId, subjects, classSubjects, results]);
 
   const filteredTerms = yearId ? terms.filter((t) => t.academic_year_id === yearId) : terms;
+  const selectedStudent = classStudents.find((s) => s.id === selectedStudentId) || null;
+  const selectedStudentIndex = classStudents.findIndex((s) => s.id === selectedStudentId);
 
   const updateCell = (
     studentId: string,
@@ -148,6 +230,26 @@ export function ResultsPage() {
     if (Number.isNaN(val)) return;
     setSheetRows((prev) =>
       prev.map((row) => (row.student_id === studentId ? { ...row, [field]: val } : row))
+    );
+  };
+
+  const updateStudentFormCell = (
+    subId: string,
+    field: 'class_exercise' | 'homework' | 'project' | 'exam',
+    rawVal: string
+  ) => {
+    setStudentFormRows((prev) =>
+      prev.map((row) => {
+        if (row.subject_id !== subId) return row;
+        const next = { ...row, [field]: rawVal };
+        const hasAnyInput =
+          next.class_exercise.trim() !== '' ||
+          next.homework.trim() !== '' ||
+          next.project.trim() !== '' ||
+          next.exam.trim() !== '';
+        next.dirty = Boolean(next.existing_id) || hasAnyInput;
+        return next;
+      })
     );
   };
 
@@ -165,7 +267,97 @@ export function ResultsPage() {
     );
   }, [sheetRows, assessment]);
 
+  const hasStudentFormValidationError = useMemo(() => {
+    return studentFormRows
+      .filter((r) => r.dirty && !r.is_locked)
+      .some((r) => {
+        const ce = Number(r.class_exercise || 0);
+        const hw = Number(r.homework || 0);
+        const pr = Number(r.project || 0);
+        const ex = Number(r.exam || 0);
+        return (
+          Number.isNaN(ce) ||
+          Number.isNaN(hw) ||
+          Number.isNaN(pr) ||
+          Number.isNaN(ex) ||
+          ce < 0 ||
+          ce > assessment.class_exercise_max ||
+          hw < 0 ||
+          hw > assessment.homework_max ||
+          pr < 0 ||
+          pr > assessment.project_max ||
+          ex < 0 ||
+          ex > assessment.exam_max
+        );
+      });
+  }, [studentFormRows, assessment]);
+
   const anyLockedInSheet = sheetRows.some((r) => r.is_locked);
+
+  const studentFormStats = useMemo(() => {
+    const entered = studentFormRows.filter((r) => r.dirty);
+    if (entered.length === 0) return { count: 0, avg: 0 };
+    const sum = entered.reduce((acc, r) => {
+      const total =
+        (Number(r.class_exercise || 0) || 0) +
+        (Number(r.homework || 0) || 0) +
+        (Number(r.project || 0) || 0) +
+        (Number(r.exam || 0) || 0);
+      return acc + total;
+    }, 0);
+    return {
+      count: entered.length,
+      avg: Math.round((sum / entered.length) * 10) / 10,
+    };
+  }, [studentFormRows]);
+
+  const handleSaveStudentForm = async (goToNext = false) => {
+    if (!yearId || !termId || !classId || !selectedStudentId) return;
+    if (hasStudentFormValidationError) {
+      notify(
+        'error',
+        `One or more marks exceed maximum limits (${assessment.class_exercise_max}/${assessment.homework_max}/${assessment.project_max}/${assessment.exam_max}).`
+      );
+      return;
+    }
+    const entries = studentFormRows
+      .filter((r) => r.dirty && !r.is_locked)
+      .map((r) => ({
+        subject_id: r.subject_id,
+        class_exercise: Number(r.class_exercise || 0) || 0,
+        homework: Number(r.homework || 0) || 0,
+        project: Number(r.project || 0) || 0,
+        exam: Number(r.exam || 0) || 0,
+      }));
+
+    if (entries.length === 0) {
+      notify('info', 'Enter scores for at least one unlocked subject before saving.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await api.saveStudentResults({
+        academic_year_id: yearId,
+        term_id: termId,
+        class_id: classId,
+        student_id: selectedStudentId,
+        entries,
+      });
+      const studentName = selectedStudent
+        ? formatFullName(selectedStudent.first_name, selectedStudent.middle_name, selectedStudent.surname)
+        : 'student';
+      notify('success', `Saved ${entries.length} subject score(s) for ${studentName}.`);
+      await loadResults();
+      if (goToNext && selectedStudentIndex >= 0 && selectedStudentIndex < classStudents.length - 1) {
+        setSelectedStudentId(classStudents[selectedStudentIndex + 1].id);
+      }
+    } catch (err: unknown) {
+      notify('error', err instanceof Error ? err.message : 'Failed to save student results.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleSaveSheet = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,26 +472,43 @@ export function ResultsPage() {
     });
   }, [results, search, subjectId]);
 
+  const openStudentFormFor = (studentId: string) => {
+    setSelectedStudentId(studentId);
+    setTab('student');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 font-display">Results &amp; Grading</h2>
+          <h2 className="text-2xl font-bold text-slate-900 font-display">Results Entry &amp; Grading</h2>
           <p className="text-sm text-slate-500 mt-1">
             Assessment weights: Ex ({assessment.class_exercise_max}) + HW ({assessment.homework_max}) + Proj (
             {assessment.project_max}) + Exam ({assessment.exam_max}) = 100 marks
           </p>
         </div>
 
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg self-start">
+        <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start">
           <button
             type="button"
-            onClick={() => setTab('entry')}
+            onClick={() => setTab('student')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+              tab === 'student' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Student Result Form
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTab('entry');
+              if (!subjectId && subjects[0]) setSubjectId(subjects[0].id);
+            }}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
               tab === 'entry' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Bulk Score Sheet
+            Bulk Subject Sheet
           </button>
           <button
             type="button"
@@ -319,7 +528,15 @@ export function ResultsPage() {
           <label className="block text-xs font-medium text-slate-600 mb-1">Academic Year</label>
           <select
             value={yearId}
-            onChange={(e) => setYearId(e.target.value)}
+            onChange={(e) => {
+              const nextYearId = e.target.value;
+              setYearId(nextYearId);
+              const matching = terms.filter((t) => t.academic_year_id === nextYearId);
+              if (matching.length && !matching.some((t) => t.id === termId)) {
+                const cur = matching.find((t) => t.is_current) || matching[0];
+                setTermId(cur.id);
+              }
+            }}
             className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white"
           >
             {years.map((y) => (
@@ -357,34 +574,282 @@ export function ResultsPage() {
             ))}
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Subject</label>
-          <select
-            value={subjectId}
-            onChange={(e) => setSubjectId(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white"
-          >
-            {tab === 'register' && <option value="">All Subjects</option>}
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.subject_code} — {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
+
+        {tab === 'student' ? (
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Student</label>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={selectedStudentIndex <= 0}
+                onClick={() =>
+                  selectedStudentIndex > 0 && setSelectedStudentId(classStudents[selectedStudentIndex - 1].id)
+                }
+                className="p-2 border border-slate-200 rounded-lg bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                title="Previous student"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <select
+                value={selectedStudentId}
+                onChange={(e) => setSelectedStudentId(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white min-w-0"
+              >
+                {classStudents.length === 0 ? (
+                  <option value="">No active students in class</option>
+                ) : (
+                  classStudents.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {formatFullName(st.first_name, st.middle_name, st.surname)} ({st.student_code})
+                    </option>
+                  ))
+                )}
+              </select>
+              <button
+                type="button"
+                disabled={selectedStudentIndex < 0 || selectedStudentIndex >= classStudents.length - 1}
+                onClick={() =>
+                  selectedStudentIndex >= 0 &&
+                  selectedStudentIndex < classStudents.length - 1 &&
+                  setSelectedStudentId(classStudents[selectedStudentIndex + 1].id)
+                }
+                className="p-2 border border-slate-200 rounded-lg bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                title="Next student"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Subject</label>
+            <select
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white"
+            >
+              {tab === 'register' ? (
+                <option value="">All Subjects</option>
+              ) : (
+                subjects.length === 0 && <option value="">No subjects available</option>
+              )}
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.subject_code} — {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {loading ? (
         <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-sm text-slate-500">
           Loading class assessment sheet...
         </div>
+      ) : tab === 'student' ? (
+        !selectedStudent ? (
+          <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-sm text-slate-500">
+            No active students enrolled in this class yet. Add or enroll a student on the Students or Classes page first.
+          </div>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSaveStudentForm(false);
+            }}
+            className="bg-white border border-slate-200 rounded-xl overflow-hidden"
+          >
+            <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  {formatFullName(
+                    selectedStudent.first_name,
+                    selectedStudent.middle_name,
+                    selectedStudent.surname
+                  )}{' '}
+                  <span className="text-xs font-mono font-normal text-slate-500 ml-1">
+                    ({selectedStudent.student_code})
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5 font-mono tabular-nums">
+                  Student {selectedStudentIndex + 1} of {classStudents.length} · Subjects Entered:{' '}
+                  <strong className="text-slate-900">{studentFormStats.count}</strong> · Overall Mean:{' '}
+                  <strong className="text-emerald-900">{studentFormStats.avg}%</strong>
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedStudentIndex < classStudents.length - 1 && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => handleSaveStudentForm(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-emerald-950 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 disabled:opacity-50"
+                  >
+                    <span>Save &amp; Next Student</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={saving || studentFormRows.length === 0}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-950 rounded-lg hover:bg-emerald-900 disabled:opacity-50"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{saving ? 'Saving...' : 'Save Student Results'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-3">
+              {studentFormRows.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-8">
+                  No active subjects configured for this school yet.
+                </p>
+              ) : (
+                <div className="divide-y divide-slate-200 border border-slate-200 rounded-xl overflow-hidden">
+                  {studentFormRows.map((row) => {
+                    const ceNum = Number(row.class_exercise || 0) || 0;
+                    const hwNum = Number(row.homework || 0) || 0;
+                    const prNum = Number(row.project || 0) || 0;
+                    const exNum = Number(row.exam || 0) || 0;
+                    const total = Math.round((ceNum + hwNum + prNum + exNum) * 100) / 100;
+                    const { grade, remark } = calculateGradeAndRemark(total, gradingScale);
+
+                    const invalidCe = ceNum < 0 || ceNum > assessment.class_exercise_max;
+                    const invalidHw = hwNum < 0 || hwNum > assessment.homework_max;
+                    const invalidPr = prNum < 0 || prNum > assessment.project_max;
+                    const invalidEx = exNum < 0 || exNum > assessment.exam_max;
+
+                    return (
+                      <div
+                        key={row.subject_id}
+                        className={`p-4 grid grid-cols-1 lg:grid-cols-12 gap-3 items-center ${
+                          row.dirty ? 'bg-white' : 'bg-slate-50/40'
+                        }`}
+                      >
+                        <div className="lg:col-span-4">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                              {row.subject_code}
+                            </span>
+                            <span className="font-semibold text-sm text-slate-900">{row.subject_name}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {row.is_locked
+                              ? 'Locked by administrator'
+                              : row.existing_id
+                                ? 'Saved score — edit to update'
+                                : 'Leave blank if student does not take this subject'}
+                          </p>
+                        </div>
+
+                        <div className="lg:col-span-6 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Class Ex. (/{assessment.class_exercise_max})
+                            </label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min={0}
+                              max={assessment.class_exercise_max}
+                              disabled={row.is_locked}
+                              placeholder="0"
+                              value={row.class_exercise}
+                              onChange={(e) => updateStudentFormCell(row.subject_id, 'class_exercise', e.target.value)}
+                              className={`w-full px-2.5 py-1.5 text-sm font-mono tabular-nums border rounded-lg ${
+                                invalidCe ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-white'
+                              } disabled:bg-slate-100 disabled:text-slate-500`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Homework (/{assessment.homework_max})
+                            </label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min={0}
+                              max={assessment.homework_max}
+                              disabled={row.is_locked}
+                              placeholder="0"
+                              value={row.homework}
+                              onChange={(e) => updateStudentFormCell(row.subject_id, 'homework', e.target.value)}
+                              className={`w-full px-2.5 py-1.5 text-sm font-mono tabular-nums border rounded-lg ${
+                                invalidHw ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-white'
+                              } disabled:bg-slate-100 disabled:text-slate-500`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Project (/{assessment.project_max})
+                            </label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min={0}
+                              max={assessment.project_max}
+                              disabled={row.is_locked}
+                              placeholder="0"
+                              value={row.project}
+                              onChange={(e) => updateStudentFormCell(row.subject_id, 'project', e.target.value)}
+                              className={`w-full px-2.5 py-1.5 text-sm font-mono tabular-nums border rounded-lg ${
+                                invalidPr ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-white'
+                              } disabled:bg-slate-100 disabled:text-slate-500`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Exam (/{assessment.exam_max})
+                            </label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min={0}
+                              max={assessment.exam_max}
+                              disabled={row.is_locked}
+                              placeholder="0"
+                              value={row.exam}
+                              onChange={(e) => updateStudentFormCell(row.subject_id, 'exam', e.target.value)}
+                              className={`w-full px-2.5 py-1.5 text-sm font-mono tabular-nums border rounded-lg ${
+                                invalidEx ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-white'
+                              } disabled:bg-slate-100 disabled:text-slate-500`}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="lg:col-span-2 flex lg:flex-col lg:items-end justify-between border-t lg:border-t-0 pt-2 lg:pt-0 border-slate-100">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-base font-bold font-mono tabular-nums text-slate-900">
+                              {row.dirty ? `${total.toFixed(1)}%` : '—'}
+                            </span>
+                            {row.dirty && (
+                              <span className="text-sm font-bold font-mono text-emerald-900">{grade}</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-slate-500">{row.dirty ? remark : 'Not entered'}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </form>
+        )
       ) : tab === 'entry' ? (
         <form onSubmit={handleSaveSheet} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70">
             <div className="text-xs text-slate-600 font-mono tabular-nums">
               Subject Mean: <strong className="text-slate-900">{sheetStats.avg}%</strong> · Highest:{' '}
               <strong className="text-slate-900">{sheetStats.highest}%</strong> ·{' '}
-              <span className={anyLockedInSheet ? 'text-amber-700 font-sans font-medium' : 'text-emerald-800 font-sans font-medium'}>
+              <span
+                className={
+                  anyLockedInSheet ? 'text-amber-700 font-sans font-medium' : 'text-emerald-800 font-sans font-medium'
+                }
+              >
                 {anyLockedInSheet ? 'Locked entries present' : 'Open for entry'}
               </span>
             </div>
@@ -433,12 +898,13 @@ export function ResultsPage() {
                   <th className="py-3 px-3 text-right">Total (/100)</th>
                   <th className="py-3 px-3 text-center">Grade</th>
                   <th className="py-3 px-4">Remarks</th>
+                  <th className="py-3 px-4 text-right">Form</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
                 {sheetRows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-500">
+                    <td colSpan={9} className="py-12 text-center text-slate-500">
                       No active students enrolled in this class yet.
                     </td>
                   </tr>
@@ -521,6 +987,16 @@ export function ResultsPage() {
                         <td className="py-2 px-4 text-xs text-slate-600">
                           {remark} {row.is_locked && '· Locked'}
                         </td>
+                        <td className="py-2 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => openStudentFormFor(row.student_id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-emerald-900 border border-emerald-200 bg-emerald-50 rounded-md hover:bg-emerald-100 whitespace-nowrap"
+                          >
+                            <ClipboardEdit className="w-3.5 h-3.5" />
+                            <span>Open Form</span>
+                          </button>
+                        </td>
                       </tr>
                     );
                   })
@@ -577,7 +1053,7 @@ export function ResultsPage() {
                     <th className="py-3 px-3 text-center">Grade</th>
                     <th className="py-3 px-3 text-right">Term Avg / Pos</th>
                     <th className="py-3 px-4">Status</th>
-                    {isAdmin && <th className="py-3 px-4 text-right">Action</th>}
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
@@ -610,19 +1086,29 @@ export function ResultsPage() {
                           <td className="py-2.5 px-4 text-xs text-slate-600">
                             {r.is_locked ? 'Locked' : 'Editable'}
                           </td>
-                          {isAdmin && (
-                            <td className="py-2.5 px-4 text-right">
+                          <td className="py-2.5 px-4 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1">
                               <button
                                 type="button"
-                                disabled={r.is_locked}
-                                onClick={() => setDeleteTarget(r)}
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-red-700 disabled:opacity-30"
-                                title={r.is_locked ? 'Unlock before deleting' : 'Delete result'}
+                                onClick={() => openStudentFormFor(r.student_id)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-900 hover:bg-slate-100"
+                                title="Edit in student form"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <ClipboardEdit className="w-4 h-4" />
                               </button>
-                            </td>
-                          )}
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  disabled={r.is_locked}
+                                  onClick={() => setDeleteTarget(r)}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-red-700 disabled:opacity-30"
+                                  title={r.is_locked ? 'Unlock before deleting' : 'Delete result'}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       );
                     })

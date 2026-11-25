@@ -98,7 +98,6 @@ CREATE TABLE IF NOT EXISTS public.teachers (
   email TEXT DEFAULT '',
   address TEXT DEFAULT '',
   academic_qualification TEXT DEFAULT '',
-  gha_number TEXT DEFAULT '',
   first_appointment_date DATE,
   current_rank TEXT DEFAULT 'Senior Superintendent II',
   date_promoted DATE,

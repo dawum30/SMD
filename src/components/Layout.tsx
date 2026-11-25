@@ -39,7 +39,7 @@ const NAV_ITEMS: { key: NavKey; label: string; icon: React.ComponentType<{ class
   { key: 'teachers', label: 'Teachers', icon: Users },
   { key: 'subjects', label: 'Subjects', icon: BookOpen },
   { key: 'classes', label: 'Classes', icon: Layers },
-  { key: 'results', label: 'Results', icon: FileSpreadsheet },
+  { key: 'results', label: 'Results Entry', icon: FileSpreadsheet },
   { key: 'attendance', label: 'Attendance', icon: CalendarCheck },
   { key: 'reports', label: 'Reports', icon: FileText },
   { key: 'settings', label: 'Settings', icon: Settings },

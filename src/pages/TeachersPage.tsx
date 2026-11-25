@@ -29,7 +29,6 @@ const emptyTeacherForm = {
   email: '',
   address: '',
   academic_qualification: 'B.Ed Basic Education',
-  gha_number: '',
   first_appointment_date: '',
   current_rank: 'Senior Superintendent II',
   date_promoted: '',
@@ -91,7 +90,6 @@ export function TeachersPage() {
       return (
         full.includes(q) ||
         t.teacher_code.toLowerCase().includes(q) ||
-        t.gha_number.toLowerCase().includes(q) ||
         t.current_rank.toLowerCase().includes(q) ||
         t.email.toLowerCase().includes(q)
       );
@@ -123,7 +121,6 @@ export function TeachersPage() {
       email: t.email || '',
       address: t.address || '',
       academic_qualification: t.academic_qualification || '',
-      gha_number: t.gha_number || '',
       first_appointment_date: t.first_appointment_date || '',
       current_rank: t.current_rank || 'Senior Superintendent II',
       date_promoted: t.date_promoted || '',
@@ -215,7 +212,7 @@ export function TeachersPage() {
   const handleExport = () => {
     downloadCSV(
       `teachers-${activeSchool?.code || 'export'}.csv`,
-      ['Teacher ID', 'Name', 'Gender', 'Phone', 'Email', 'Qualification', 'GHA Number', 'Rank', 'First Appt', 'Promoted', 'Status'],
+      ['Teacher ID', 'Name', 'Gender', 'Phone', 'Email', 'Qualification', 'Rank', 'First Appt', 'Promoted', 'Status'],
       filtered.map((t) => [
         t.teacher_code,
         formatFullName(t.first_name, t.middle_name, t.surname),
@@ -223,7 +220,6 @@ export function TeachersPage() {
         t.phone,
         t.email,
         t.academic_qualification,
-        t.gha_number,
         t.current_rank,
         t.first_appointment_date || '',
         t.date_promoted || '',
@@ -238,7 +234,7 @@ export function TeachersPage() {
         <div>
           <h2 className="text-2xl font-bold text-slate-900 font-display">Teachers &amp; Staff Directory</h2>
           <p className="text-sm text-slate-500 mt-1">
-            {filtered.length} staff member{filtered.length === 1 ? '' : 's'} · GES rank &amp; GHA number records
+            {filtered.length} staff member{filtered.length === 1 ? '' : 's'} · GES rank &amp; staff records
           </p>
         </div>
 
@@ -280,7 +276,7 @@ export function TeachersPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, ID, GHA number, rank..."
+            placeholder="Search name, ID, rank..."
             className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-800"
           />
         </div>
@@ -314,7 +310,7 @@ export function TeachersPage() {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/70 text-xs font-semibold text-slate-600">
                 <th className="py-3 px-4">Teacher</th>
-                <th className="py-3 px-4">Teacher ID / GHA No.</th>
+                <th className="py-3 px-4">Teacher ID</th>
                 <th className="py-3 px-4">Rank &amp; Qualification</th>
                 <th className="py-3 px-4">Assigned Subjects &amp; Classes</th>
                 <th className="py-3 px-4">Status</th>
@@ -361,7 +357,6 @@ export function TeachersPage() {
                       </td>
                       <td className="py-3 px-4 font-mono text-xs tabular-nums">
                         <p className="text-slate-900 font-medium">{t.teacher_code}</p>
-                        <p className="text-slate-500">{t.gha_number || 'No GHA No.'}</p>
                       </td>
                       <td className="py-3 px-4">
                         <p className="text-slate-900 text-sm">{t.current_rank}</p>
@@ -536,17 +531,7 @@ export function TeachersPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">GHA Number</label>
-              <input
-                type="text"
-                value={form.gha_number}
-                onChange={(e) => setForm({ ...form, gha_number: e.target.value })}
-                placeholder="GHA-000000000-0"
-                className="w-full px-3 py-2 text-sm font-mono border border-slate-300 rounded-lg"
-              />
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Current GES Rank</label>
               <select
@@ -696,7 +681,7 @@ export function TeachersPage() {
                   {formatFullName(viewTeacher.first_name, viewTeacher.middle_name, viewTeacher.surname)}
                 </h3>
                 <p className="text-xs text-slate-500 font-mono">
-                  {viewTeacher.teacher_code} · GHA: {viewTeacher.gha_number || '—'} · {viewTeacher.employment_status}
+                  {viewTeacher.teacher_code} · {viewTeacher.employment_status}
                 </p>
                 <p className="text-sm text-emerald-900 font-medium mt-1">{viewTeacher.current_rank}</p>
               </div>

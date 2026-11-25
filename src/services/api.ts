@@ -665,7 +665,7 @@ export const api = {
     if (isSupabaseConfigured()) {
       const sb = getSupabaseClient()!;
       const schoolId = requireActiveSchoolId();
-      const { assigned_subject_ids, ...rest } = payload;
+      const { assigned_subject_ids, gha_number: _gha, ...rest } = payload;
       const { data: teacher, error } = await sb
         .from('teachers')
         .insert({ ...rest, school_id: schoolId, teacher_code: '' })
@@ -686,7 +686,7 @@ export const api = {
     if (isSupabaseConfigured()) {
       const sb = getSupabaseClient()!;
       const schoolId = requireActiveSchoolId();
-      const { assigned_subject_ids, ...rest } = payload;
+      const { assigned_subject_ids, gha_number: _gha, ...rest } = payload;
       const { error } = await sb.from('teachers').update(rest).eq('id', id).eq('school_id', schoolId);
       if (error) throw new Error(error.message);
       if (Array.isArray(assigned_subject_ids)) {
@@ -927,6 +927,64 @@ export const api = {
       return;
     }
     await localFetch('/api/results/bulk', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  async saveStudentResults(payload: {
+    academic_year_id: string;
+    term_id: string;
+    class_id: string;
+    student_id: string;
+    entries: { subject_id: string; class_exercise: number; homework: number; project: number; exam: number }[];
+  }): Promise<void> {
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      const schoolId = requireActiveSchoolId();
+      const { data: scales } = await sb.from('grading_scales').select('*').eq('school_id', schoolId);
+      const rows = payload.entries.map((e) => {
+        const total = Number(e.class_exercise) + Number(e.homework) + Number(e.project) + Number(e.exam);
+        const { grade, remark } = calculateGradeAndRemark(total, (scales || []) as GradingScaleItem[]);
+        return {
+          school_id: schoolId,
+          student_id: payload.student_id,
+          class_id: payload.class_id,
+          subject_id: e.subject_id,
+          academic_year_id: payload.academic_year_id,
+          term_id: payload.term_id,
+          class_exercise: e.class_exercise,
+          homework: e.homework,
+          project: e.project,
+          exam: e.exam,
+          total_score: total,
+          grade,
+          remarks: remark,
+        };
+      });
+      const { error } = await sb.from('results').upsert(rows, {
+        onConflict: 'school_id,student_id,subject_id,academic_year_id,term_id',
+      });
+      if (error) throw new Error(error.message);
+      return;
+    }
+    for (const entry of payload.entries) {
+      await localFetch('/api/results/bulk', {
+        method: 'POST',
+        body: JSON.stringify({
+          academic_year_id: payload.academic_year_id,
+          term_id: payload.term_id,
+          class_id: payload.class_id,
+          subject_id: entry.subject_id,
+          entries: [
+            {
+              student_id: payload.student_id,
+              class_exercise: entry.class_exercise,
+              homework: entry.homework,
+              project: entry.project,
+              exam: entry.exam,
+            },
+          ],
+        }),
+      });
+    }
   },
 
   async lockResults(payload: { academic_year_id: string; term_id: string; class_id: string; subject_id?: string; locked: boolean }): Promise<void> {

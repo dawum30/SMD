@@ -81,7 +81,6 @@ export interface Teacher {
   email: string;
   address: string;
   academic_qualification: string;
-  gha_number: string;
   first_appointment_date: string | null;
   current_rank: string;
   date_promoted: string | null;

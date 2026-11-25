@@ -991,7 +991,6 @@ export function createApiRouter() {
       email = '',
       address = '',
       academic_qualification = '',
-      gha_number = '',
       first_appointment_date = null,
       current_rank = 'Senior Superintendent II',
       date_promoted = null,
@@ -1017,12 +1016,12 @@ export function createApiRouter() {
       db.prepare(`
         INSERT INTO teachers (
           id, school_id, teacher_code, first_name, middle_name, surname, gender,
-          phone, email, address, academic_qualification, gha_number,
+          phone, email, address, academic_qualification,
           first_appointment_date, current_rank, date_promoted, employment_status, photo_url
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         teacherId, schoolId, teacherCode, first_name.trim(), middle_name.trim(), surname.trim(), gender,
-        phone, email, address, academic_qualification, gha_number,
+        phone, email, address, academic_qualification,
         first_appointment_date || null, current_rank, date_promoted || null, employment_status, photo_url
       );
 
@@ -1050,7 +1049,6 @@ export function createApiRouter() {
       email,
       address,
       academic_qualification,
-      gha_number,
       first_appointment_date,
       current_rank,
       date_promoted,
@@ -1070,7 +1068,6 @@ export function createApiRouter() {
             email = COALESCE(?, email),
             address = COALESCE(?, address),
             academic_qualification = COALESCE(?, academic_qualification),
-            gha_number = COALESCE(?, gha_number),
             first_appointment_date = ?,
             current_rank = COALESCE(?, current_rank),
             date_promoted = ?,
@@ -1087,7 +1084,6 @@ export function createApiRouter() {
         email ?? null,
         address ?? null,
         academic_qualification ?? null,
-        gha_number ?? null,
         first_appointment_date || null,
         current_rank ?? null,
         date_promoted || null,

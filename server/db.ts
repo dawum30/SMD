@@ -120,7 +120,6 @@ export function initSchema(): void {
       email TEXT DEFAULT '',
       address TEXT DEFAULT '',
       academic_qualification TEXT DEFAULT '',
-      gha_number TEXT DEFAULT '',
       first_appointment_date TEXT,
       current_rank TEXT DEFAULT 'Senior Superintendent II',
       date_promoted TEXT,

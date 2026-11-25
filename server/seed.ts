@@ -115,30 +115,30 @@ export function seedInitialDatabase(): void {
     db.prepare(`
       INSERT INTO teachers (
         id, school_id, user_id, teacher_code, first_name, middle_name, surname,
-        gender, phone, email, address, academic_qualification, gha_number,
+        gender, phone, email, address, academic_qualification,
         first_appointment_date, current_rank, date_promoted, employment_status
       ) VALUES (?, ?, ?, 'TCH-0001', 'Kofi', 'Mensah', 'Owusu-Ansah', 'Male', '+233 24 553 1920',
-        'kofi.owusu@accraridgebasic.edu.gh', 'Adabraka, Accra', 'B.Ed Basic Education (UEW)', 'GHA-719204512-3',
+        'kofi.owusu@accraridgebasic.edu.gh', 'Adabraka, Accra', 'B.Ed Basic Education (UEW)',
         '2018-09-01', 'Principal Superintendent', '2023-09-01', 'Active')
     `).run(teacher1Id, schoolId, teacherUserId);
 
     db.prepare(`
       INSERT INTO teachers (
         id, school_id, user_id, teacher_code, first_name, middle_name, surname,
-        gender, phone, email, address, academic_qualification, gha_number,
+        gender, phone, email, address, academic_qualification,
         first_appointment_date, current_rank, date_promoted, employment_status
       ) VALUES (?, ?, NULL, 'TCH-0002', 'Efua', 'Serwaa', 'Darko', 'Female', '+233 20 882 3411',
-        'efua.darko@accraridgebasic.edu.gh', 'Cantonments, Accra', 'B.Sc Mathematics Education (UCC)', 'GHA-882310942-7',
+        'efua.darko@accraridgebasic.edu.gh', 'Cantonments, Accra', 'B.Sc Mathematics Education (UCC)',
         '2020-09-01', 'Senior Superintendent I', '2024-09-01', 'Active')
     `).run(teacher2Id, schoolId);
 
     db.prepare(`
       INSERT INTO teachers (
         id, school_id, user_id, teacher_code, first_name, middle_name, surname,
-        gender, phone, email, address, academic_qualification, gha_number,
+        gender, phone, email, address, academic_qualification,
         first_appointment_date, current_rank, date_promoted, employment_status
       ) VALUES (?, ?, NULL, 'TCH-0003', 'Yaw', '', 'Tetteh', 'Male', '+233 54 319 7704',
-        'yaw.tetteh@accraridgebasic.edu.gh', 'Osu RE, Accra', 'Diploma in Basic Education', 'GHA-640192831-1',
+        'yaw.tetteh@accraridgebasic.edu.gh', 'Osu RE, Accra', 'Diploma in Basic Education',
         '2022-01-10', 'Senior Superintendent II', '2022-01-10', 'Active')
     `).run(teacher3Id, schoolId);
 
